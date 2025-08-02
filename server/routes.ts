@@ -7,7 +7,8 @@ import { openaiService } from "./services/openaiService";
 import { emailService } from "./services/emailService";
 import { fileProcessor } from "./services/fileProcessor";
 import { youtubeService } from "./services/youtubeService";
-import { insertSourceSchema, insertAiSessionSchema, insertQaSchema } from "@shared/schema";
+import { insertSourceSchema, insertAiSessionSchema, insertQaSchema, loginSchema, registerSchema } from "@shared/schema";
+import { AuthService } from "./services/authService";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -19,8 +20,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
+  // Custom authentication middleware that supports both OAuth and email auth
+  const customAuth = async (req: any, res: any, next: any) => {
+    // Check if user is authenticated via OAuth (Replit Auth)
+    if (req.isAuthenticated && req.isAuthenticated() && req.user?.claims?.sub) {
+      return next();
+    }
+    
+    // Check if user is authenticated via email (session-based)
+    if ((req.session as any)?.userId) {
+      req.user = { 
+        claims: { sub: (req.session as any).userId },
+        authMethod: (req.session as any).authMethod || "email"
+      };
+      return next();
+    }
+
+    return res.status(401).json({ message: "Unauthorized" });
+  };
+
   // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  app.get('/api/auth/user', customAuth, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
@@ -31,8 +51,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Email authentication routes
+  app.post('/api/auth/register', async (req, res) => {
+    try {
+      const validatedData = registerSchema.parse(req.body);
+      const user = await AuthService.registerUser(validatedData);
+      
+      // Send welcome email
+      try {
+        await emailService.sendWelcomeEmail(user.email, user.firstName || "User");
+      } catch (emailError) {
+        console.error("Failed to send welcome email:", emailError);
+        // Don't fail registration if email fails
+      }
+
+      // Create session for the user
+      (req.session as any).userId = user.id;
+      (req.session as any).authMethod = "email";
+      
+      res.status(201).json({
+        message: "Registration successful",
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName
+        }
+      });
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      res.status(400).json({ message: error.message || "Registration failed" });
+    }
+  });
+
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const validatedData = loginSchema.parse(req.body);
+      const user = await AuthService.loginUser(validatedData);
+
+      // Create session for the user  
+      (req.session as any).userId = user.id;
+      (req.session as any).authMethod = "email";
+      
+      res.json({
+        message: "Login successful",
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName
+        }
+      });
+    } catch (error: any) {
+      console.error("Login error:", error);
+      res.status(401).json({ message: error.message || "Login failed" });
+    }
+  });
+
   // File upload route
-  app.post('/api/upload', isAuthenticated, upload.single('file'), async (req: any, res) => {
+  app.post('/api/upload', customAuth, upload.single('file'), async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const file = req.file;
@@ -77,7 +154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // YouTube URL processing route
-  app.post('/api/youtube', isAuthenticated, async (req: any, res) => {
+  app.post('/api/youtube', customAuth, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const { url } = req.body;
@@ -123,7 +200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Ask question route
-  app.post('/api/ask', isAuthenticated, async (req: any, res) => {
+  app.post('/api/ask', customAuth, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const { sessionId, question } = req.body;
@@ -163,7 +240,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user sessions
-  app.get('/api/sessions', isAuthenticated, async (req: any, res) => {
+  app.get('/api/sessions', customAuth, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const sessions = await storage.getUserSessions(userId);
@@ -184,7 +261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get specific session with Q&As
-  app.get('/api/sessions/:id', isAuthenticated, async (req: any, res) => {
+  app.get('/api/sessions/:id', customAuth, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const sessionId = req.params.id;
@@ -204,7 +281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete session
-  app.delete('/api/sessions/:id', isAuthenticated, async (req: any, res) => {
+  app.delete('/api/sessions/:id', customAuth, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const sessionId = req.params.id;
@@ -223,7 +300,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update user theme preference
-  app.patch('/api/user/theme', isAuthenticated, async (req: any, res) => {
+  app.patch('/api/user/theme', customAuth, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const { theme } = req.body;

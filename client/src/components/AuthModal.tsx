@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FaGoogle } from "react-icons/fa";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -14,26 +16,101 @@ interface AuthModalProps {
 
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [activeTab, setActiveTab] = useState("login");
-  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    firstName: "",
+    lastName: "",
+  });
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const handleGoogleLogin = () => {
     window.location.href = "/api/login";
   };
 
-  const handleEmailAuth = async (e: React.FormEvent<HTMLFormElement>) => {
+  const loginMutation = useMutation({
+    mutationFn: async (data: { email: string; password: string }) => {
+      const response = await apiRequest("POST", "/api/auth/login", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Logged in successfully!",
+        variant: "default",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      onClose();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Login Failed",
+        description: error.message || "Invalid email or password",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const registerMutation = useMutation({
+    mutationFn: async (data: { email: string; password: string; firstName: string; lastName: string }) => {
+      const response = await apiRequest("POST", "/api/auth/register", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Account created successfully!",
+        variant: "default",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      onClose();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Registration Failed",
+        description: error.message || "Failed to create account",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEmailLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading(true);
+    if (!formData.email || !formData.password) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    loginMutation.mutate({ email: formData.email, password: formData.password });
+  };
 
-    // For now, redirect to Google OAuth since we're using Replit Auth
-    // In a full implementation, you'd handle email/password authentication here
-    toast({
-      title: "Authentication",
-      description: "Please use Google login for now. Email authentication coming soon!",
-      variant: "default",
-    });
+  const handleEmailRegister = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!formData.email || !formData.password || !formData.firstName || !formData.lastName) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (formData.password.length < 6) {
+      toast({
+        title: "Validation Error",
+        description: "Password must be at least 6 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+    registerMutation.mutate(formData);
+  };
 
-    setIsLoading(false);
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -55,13 +132,15 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </TabsList>
 
           <TabsContent value="login" className="space-y-4">
-            <form onSubmit={handleEmailAuth} className="space-y-4">
+            <form onSubmit={handleEmailLogin} className="space-y-4">
               <div>
                 <Label htmlFor="login-email">Email</Label>
                 <Input
                   id="login-email"
                   type="email"
                   placeholder="Enter your email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
                   required
                 />
               </div>
@@ -71,25 +150,42 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   id="login-password"
                   type="password"
                   placeholder="Enter your password"
+                  value={formData.password}
+                  onChange={(e) => handleInputChange("password", e.target.value)}
                   required
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Logging in..." : "Login"}
+              <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
+                {loginMutation.isPending ? "Logging in..." : "Login"}
               </Button>
             </form>
           </TabsContent>
 
           <TabsContent value="signup" className="space-y-4">
-            <form onSubmit={handleEmailAuth} className="space-y-4">
-              <div>
-                <Label htmlFor="signup-name">Full Name</Label>
-                <Input
-                  id="signup-name"
-                  type="text"
-                  placeholder="Enter your full name"
-                  required
-                />
+            <form onSubmit={handleEmailRegister} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="signup-first-name">First Name</Label>
+                  <Input
+                    id="signup-first-name"
+                    type="text"
+                    placeholder="First name"
+                    value={formData.firstName}
+                    onChange={(e) => handleInputChange("firstName", e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="signup-last-name">Last Name</Label>
+                  <Input
+                    id="signup-last-name"
+                    type="text"
+                    placeholder="Last name"
+                    value={formData.lastName}
+                    onChange={(e) => handleInputChange("lastName", e.target.value)}
+                    required
+                  />
+                </div>
               </div>
               <div>
                 <Label htmlFor="signup-email">Email</Label>
@@ -97,6 +193,8 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   id="signup-email"
                   type="email"
                   placeholder="Enter your email"
+                  value={formData.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
                   required
                 />
               </div>
@@ -105,12 +203,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 <Input
                   id="signup-password"
                   type="password"
-                  placeholder="Enter your password"
+                  placeholder="Create a password (min 6 characters)"
+                  value={formData.password}
+                  onChange={(e) => handleInputChange("password", e.target.value)}
                   required
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Signing up..." : "Sign Up"}
+              <Button type="submit" className="w-full" disabled={registerMutation.isPending}>
+                {registerMutation.isPending ? "Creating Account..." : "Create Account"}
               </Button>
             </form>
           </TabsContent>
@@ -131,7 +231,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           variant="outline"
           onClick={handleGoogleLogin}
           className="w-full"
-          disabled={isLoading}
+          disabled={loginMutation.isPending || registerMutation.isPending}
         >
           <FaGoogle className="mr-2 h-4 w-4 text-red-500" />
           Google
