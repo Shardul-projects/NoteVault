@@ -1,0 +1,189 @@
+Target platforms: Android & iOS (via Expo / React Native)
+Core idea: User uploads notes (PDF / TXT / Markdown) or pastes a YouTube video link; the AI ingests, indexes, and analyzes the content, then returns (1) a concise summary and (2) answers to arbitrary user questions about that content.
+Auth & Persistence: Email + Google login; each user has a persistent history (“past records”) accessible from any device after login.
+UX: Light/dark toggle (white & black modes).
+Automated Email: On signup, send a personalized “Thank you for using ClipNotes AI” email from CEO Shardul Kamble.
+
+Tech stack recommendation (suitable for Replit):
+Frontend: Expo / React Native (for Android & iOS)
+
+Backend: Node.js + Express (or Fastify)
+
+Authentication & Database: Supabase (Postgres + auth with OAuth Google + email/password), with vector capabilities for semantic retrieval
+
+AI: OpenAI API (e.g., GPT-4 or gpt-4-turbo + embeddings) to:
+
+Embed uploaded text / YouTube transcript
+
+Build & query vector store for retrieval-augmented generation (RAG)
+
+YouTube processing:
+
+Fetch transcript (using transcript libraries or APIs)
+
+Clean, chunk, embed
+
+Storage: Supabase (or S3-compatible) for raw uploads and metadata
+
+Email: SendGrid (or Supabase Email / SMTP) to send automated onboarding “thank you” email
+
+State sync & history: Persist every AI interaction / summary / question-answer pair per user in Postgres; versioned by timestamp
+
+Theme: Light/dark mode toggle; respect system preference
+
+Features & Requirements
+Signup/Login
+
+Email/password signup & login
+
+Google OAuth login
+
+Secure session/JWT handling
+
+“Login from anywhere”: user’s history and data fetched server-side after authentication
+
+Content Ingestion
+
+Upload notes (PDF/TXT/MD): backend extracts text.
+
+Paste YouTube video link: system auto-fetches and cleans transcript.
+
+Chunk long content, create embeddings, and store in a per-user vector store tied to source.
+
+AI Interface
+
+Summary: “Summarize this” produces concise bullet-point summary.
+
+Q&A: Free-form questions answered based on retrieved context; includes source attribution (e.g., which chunk or timestamp).
+
+History / Past Records
+
+Store every summary and Q&A with metadata: title, type (note/video), timestamp, question, answer.
+
+UI: list of past sessions; ability to reopen, re-query, rename, export, or delete.
+
+Automated Onboarding Email
+
+Triggered on successful registration.
+
+Subject: “Welcome to ClipNotes AI — Thanks from Shardul Kamble”
+
+Body:
+
+css
+Copy
+Edit
+Hi {{user_name}},
+
+Thank you for joining ClipNotes AI! I’m Shardul Kamble, and I’m thrilled you chose our platform to make sense of your notes and YouTube learnings.
+
+Get started by uploading your notes or pasting a YouTube video link. Our AI will summarize the content and answer any question you have about it—instantly.
+
+If you have any feedback, just reply to this email. Welcome aboard!
+
+— Shardul Kamble  
+CEO, ClipNotes AI
+Theme Toggle
+
+Light (white) / dark (black) mode switch.
+
+Default to system preference; persist per user.
+
+Cross-device Sync
+
+All user data (history, preferences, uploaded sources) stored server-side under their account.
+
+Logging in from any device retrieves the same state seamlessly.
+
+Folder / Component Outline
+markdown
+Copy
+Edit
+/client (Expo React Native)
+  /components
+    - AuthForm.tsx
+    - UploadNotes.tsx
+    - YouTubeInput.tsx
+    - SummaryViewer.tsx
+    - HistoryList.tsx
+    - QnAInterface.tsx
+    - ThemeToggle.tsx
+  /screens
+    - LoginScreen.tsx
+    - SignupScreen.tsx
+    - DashboardScreen.tsx
+    - ContentDetailScreen.tsx
+    - HistoryScreen.tsx
+  - App.tsx (auth state, theme, routing)
+
+/server (Node.js + Express)
+  /routes
+    - auth.js
+    - upload.js
+    - youtube.js
+    - ai.js
+    - history.js
+  /services
+    - openaiClient.js
+    - emailSender.js
+    - vectorStore.js
+  - middleware/auth.js
+  - index.js
+Environment Variables
+ini
+Copy
+Edit
+OPENAI_API_KEY=...
+SUPABASE_URL=...
+SUPABASE_SERVICE_KEY=...
+SUPABASE_ANON_KEY=...
+SENDGRID_API_KEY=...
+JWT_SECRET=...
+GOOGLE_OAUTH_CLIENT_ID=...
+GOOGLE_OAUTH_CLIENT_SECRET=...
+APP_NAME=ClipNotes AI
+FROM_EMAIL=welcome@clipnotes.ai
+AI Prompt Strategy (high-level)
+Summary:
+
+“Given the following content chunks, produce a concise summary in 3–5 bullet points emphasizing key concepts and actionable insights.”
+
+Q&A:
+
+yaml
+Copy
+Edit
+User question: {{question}}
+Context: {{top_retrieved_chunks}}
+Instruction: Answer based only on the provided context. If the answer cannot be determined from it, respond: “I don’t know from the provided content.” Include source attribution (e.g., timestamps or chunk IDs).
+Simplified Schema
+sql
+Copy
+Edit
+users(id, email, name, created_at, theme_preference)
+sources(id, user_id, type, title, original_link, created_at)
+sessions(id, user_id, source_id, summary, created_at)
+qas(id, session_id, question, answer, source_chunks, created_at)
+UX Notes
+Loading states during AI processing.
+
+Cache embeddings per source for speed.
+
+Renameable saved content.
+
+Export session (PDF/Markdown).
+
+Deployment on Replit
+Use a multi-file Replit (Node + Expo).
+
+Secure secrets via Replit secret manager.
+
+Backend and frontend communicate over authenticated API.
+
+Stretch Goals
+Push notifications for long-running jobs.
+
+Shareable read-only summary links.
+
+Global search across all past records.
+
