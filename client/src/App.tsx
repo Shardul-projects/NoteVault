@@ -22,10 +22,7 @@ import { History } from "@/pages/History";
 import NotFound from "@/pages/not-found";
 
 function Router() {
-  // Temporarily bypass auth for testing
-  const isAuthenticated = false;
-  const isLoading = false;
-  // const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [currentView, setCurrentView] = useState<"dashboard" | "analysis" | "history">("dashboard");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);

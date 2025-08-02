@@ -38,11 +38,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" aria-describedby="auth-description">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-center">
             Welcome to ClipNotes AI
           </DialogTitle>
+          <p id="auth-description" className="sr-only">
+            Login or sign up to access ClipNotes AI content analysis features
+          </p>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
